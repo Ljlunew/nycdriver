@@ -1,0 +1,1188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Driver Map - NYC Driver Density Map</title>
+    
+    <!-- PWA Configuration -->
+    <meta name="application-name" content="NYC Driver Map">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="NYC Driver">
+    <meta name="description" content="NYC rideshare driver map with real-time tracking. Stay Together • Unity Is Strength">
+    <meta name="theme-color" content="#000000">
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- iOS Icons -->
+    <link rel="apple-touch-icon" href="icons/icon-152x152.png">
+    <link rel="apple-touch-icon" sizes="72x72" href="icons/icon-72x72.png">
+    <link rel="apple-touch-icon" sizes="96x96" href="icons/icon-96x96.png">
+    <link rel="apple-touch-icon" sizes="128x128" href="icons/icon-128x128.png">
+    <link rel="apple-touch-icon" sizes="144x144" href="icons/icon-144x144.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="icons/icon-152x152.png">
+    <link rel="apple-touch-icon" sizes="192x192" href="icons/icon-192x192.png">
+    <link rel="apple-touch-icon" sizes="384x384" href="icons/icon-384x384.png">
+    <link rel="apple-touch-icon" sizes="512x512" href="icons/icon-512x512.png">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="32x32" href="icons/icon-72x72.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="icons/icon-72x72.png">
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #1a1a1a;
+            color: white;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        /* Floating background stars */
+        .stars {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .star {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            animation: float 4s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0) scale(1); opacity: 0.3; }
+            50% { transform: translateY(-20px) scale(1.2); opacity: 0.6; }
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.15); }
+        }
+
+        @keyframes moveAnimation {
+            0%, 100% { transform: translateX(0); }
+            50% { transform: translateX(3px); }
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        .header {
+            padding: 20px;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            position: relative;
+            z-index: 1000;
+        }
+
+        .header h1 {
+            font-size: 1.1em;
+            font-weight: 300;
+            letter-spacing: 1.5px;
+        }
+
+        /* Control Panel */
+        .controls {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            left: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 1000;
+        }
+
+        .btn {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 50px;
+            cursor: pointer;
+            font-size: 0.75em;
+            transition: all 0.3s;
+            font-weight: 300;
+            letter-spacing: 0.5px;
+        }
+
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+        }
+
+        /* Status Indicator */
+        .status {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(74, 222, 128, 0.2);
+            border: 1px solid rgba(74, 222, 128, 0.5);
+            padding: 6px 14px;
+            border-radius: 50px;
+            font-size: 0.7em;
+            font-weight: 300;
+            cursor: pointer;
+            transition: all 0.3s;
+            z-index: 1000;
+        }
+
+        .status.offline {
+            background: rgba(248, 113, 113, 0.2);
+            border-color: rgba(248, 113, 113, 0.5);
+        }
+
+        .status:hover {
+            transform: scale(1.05);
+        }
+
+        /* Map Container */
+        #map {
+            flex: 1;
+            width: 100%;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Leaflet dark theme */
+        .leaflet-tile-pane {
+            filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7);
+        }
+
+        .leaflet-control-attribution {
+            background: rgba(0, 0, 0, 0.5) !important;
+            color: rgba(255, 255, 255, 0.5) !important;
+        }
+
+        .leaflet-control-attribution a {
+            color: rgba(255, 255, 255, 0.7) !important;
+        }
+
+        /* Vehicle icon styles */
+        .vehicle-icon {
+            background: transparent !important;
+            border: none !important;
+        }
+
+        .vehicle-icon div {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Registration/Login Overlay - FIXED */
+        .api-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            backdrop-filter: blur(30px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 99999; /* Increased z-index to ensure it's on top */
+        }
+
+        .api-overlay.hidden {
+            display: none;
+        }
+
+        /* CRITICAL FIX: Hide ALL UI elements when overlay is active */
+        body.overlay-active .header,
+        body.overlay-active .controls,
+        body.overlay-active .status,
+        body.overlay-active .stats,
+        body.overlay-active #map {
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+        }
+
+        .api-box {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 500px;
+            width: 90%;
+            text-align: center;
+        }
+
+        .api-box h2 {
+            font-weight: 300;
+            margin-bottom: 20px;
+            font-size: 1.8em;
+        }
+
+        .api-box p {
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 30px;
+            line-height: 1.6;
+            font-size: 0.9em;
+        }
+
+        .api-box input {
+            width: 100%;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50px;
+            color: white;
+            font-size: 0.9em;
+            margin-bottom: 15px;
+            outline: none;
+            transition: all 0.3s;
+        }
+
+        .api-box input:focus {
+            border-color: rgba(255, 255, 255, 0.5);
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .api-box input::placeholder {
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        .api-box select {
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            width: 100%;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50px;
+            color: white;
+            font-size: 0.9em;
+            margin-bottom: 15px;
+            outline: none;
+            cursor: pointer;
+            transition: all 0.3s;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='white' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 15px center;
+            padding-right: 40px;
+        }
+
+        .api-box select:focus {
+            border-color: rgba(255, 255, 255, 0.5);
+            background-color: rgba(255, 255, 255, 0.15);
+        }
+
+        .api-box select option {
+            background: #2a2a2a;
+            color: white;
+            padding: 10px;
+        }
+
+        .api-box .btn-primary {
+            width: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            padding: 15px;
+            border-radius: 50px;
+            color: white;
+            font-size: 0.95em;
+            font-weight: 400;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 10px;
+        }
+
+        .api-box .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        }
+
+        .api-box .toggle-link {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.85em;
+            margin-top: 20px;
+            cursor: pointer;
+            transition: color 0.3s;
+        }
+
+        .api-box .toggle-link:hover {
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        /* Stats Card */
+        .stats {
+            position: absolute;
+            bottom: 15px;
+            left: 15px;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 12px 16px;
+            min-width: 160px;
+            z-index: 1000;
+        }
+
+        .stats h3 {
+            font-size: 0.75em;
+            font-weight: 300;
+            margin-bottom: 10px;
+            color: rgba(255, 255, 255, 0.7);
+            letter-spacing: 0.5px;
+        }
+
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 6px;
+            font-size: 0.75em;
+        }
+
+        .stat-item .label {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .stat-item .value {
+            font-weight: 400;
+            color: white;
+        }
+
+        .stat-item.available .value {
+            color: #4ade80;
+        }
+
+        .stat-item.busy .value {
+            color: #f87171;
+        }
+
+        /* PWA Install Button */
+        .install-prompt {
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 30px;
+            border-radius: 50px;
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+            display: none;
+            align-items: center;
+            gap: 10px;
+            z-index: 10001;
+            cursor: pointer;
+            transition: all 0.3s;
+            animation: slideUp 0.5s ease-out;
+        }
+
+        .install-prompt.show {
+            display: flex;
+        }
+
+        .install-prompt:hover {
+            transform: translateX(-50%) translateY(-2px);
+            box-shadow: 0 15px 40px rgba(102, 126, 234, 0.6);
+        }
+
+        .install-prompt .close-btn {
+            margin-left: 10px;
+            font-size: 1.2em;
+            cursor: pointer;
+            opacity: 0.7;
+            transition: opacity 0.3s;
+        }
+
+        .install-prompt .close-btn:hover {
+            opacity: 1;
+        }
+
+        @keyframes slideUp {
+            from {
+                bottom: -100px;
+                opacity: 0;
+            }
+            to {
+                bottom: 80px;
+                opacity: 1;
+            }
+        }
+
+        /* Offline indicator */
+        .offline-indicator {
+            position: fixed;
+            top: 70px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(248, 113, 113, 0.95);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 50px;
+            display: none;
+            align-items: center;
+            gap: 10px;
+            z-index: 10001;
+            font-size: 0.9em;
+        }
+
+        .offline-indicator.show {
+            display: flex;
+        }
+
+        /* Mobile Optimization */
+        @media (max-width: 768px) {
+            .header {
+                padding: 12px;
+            }
+
+            .header h1 {
+                font-size: 0.9em;
+                letter-spacing: 1px;
+            }
+
+            .controls {
+                gap: 8px;
+                left: 10px;
+            }
+
+            .btn {
+                padding: 6px 12px;
+                font-size: 0.7em;
+            }
+
+            .status {
+                top: 10px;
+                right: 10px;
+                padding: 5px 12px;
+                font-size: 0.65em;
+            }
+
+            .stats {
+                bottom: 10px;
+                left: 10px;
+                padding: 10px 12px;
+                min-width: 140px;
+            }
+
+            .stats h3 {
+                font-size: 0.7em;
+                margin-bottom: 8px;
+            }
+
+            .stat-item {
+                font-size: 0.7em;
+                margin-bottom: 5px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Background stars -->
+    <div class="stars" id="starsContainer"></div>
+
+    <!-- PWA Install Prompt -->
+    <div class="install-prompt" id="installPrompt">
+        <span>📱 安装 NYC Driver Map 到手机</span>
+        <span class="close-btn" onclick="dismissInstallPrompt()">✕</span>
+    </div>
+
+    <!-- Offline Indicator -->
+    <div class="offline-indicator" id="offlineIndicator">
+        <span>⚠️ 离线模式 - 部分功能受限</span>
+    </div>
+
+    <!-- Registration/Login Overlay -->
+    <div id="registrationOverlay" class="api-overlay">
+        <div class="api-box">
+            <!-- Registration Form -->
+            <div id="registerForm">
+                <h2>Driver Registration</h2>
+                <p style="font-size: 1.1em; font-weight: 400; color: rgba(255, 255, 255, 0.8); margin-bottom: 10px;">NYC Rideshare Driver</p>
+                <p style="font-size: 0.95em; font-style: italic; color: rgba(74, 222, 128, 0.8); margin-bottom: 30px;">Stay Together • Unity Is Strength</p>
+                <input type="text" id="registerName" placeholder="Full Name" required>
+                <input type="tel" id="registerPhone" placeholder="Phone Number" required>
+                <input type="text" id="registerPlate" placeholder="TLC Plate Number" required style="text-transform: uppercase;">
+                <select id="registerVehicleType" required>
+                    <option value="">Select Vehicle Type</option>
+                    <option value="uberx">🚗 UberX</option>
+                    <option value="xl">🚐 XL</option>
+                    <option value="black">🖤 Black</option>
+                </select>
+                <button class="btn-primary" onclick="handleRegister()">Register</button>
+                <div class="toggle-link" onclick="toggleForms()">Already have an account? Login</div>
+            </div>
+
+            <!-- Login Form -->
+            <div id="loginForm" style="display: none;">
+                <h2>Driver Login</h2>
+                <p style="font-size: 1.1em; font-weight: 400; color: rgba(255, 255, 255, 0.8); margin-bottom: 10px;">NYC Rideshare Driver</p>
+                <p style="font-size: 0.95em; font-style: italic; color: rgba(74, 222, 128, 0.8); margin-bottom: 30px;">Stay Together • Unity Is Strength</p>
+                <input type="tel" id="loginPhone" placeholder="Phone Number" required>
+                <button class="btn-primary" onclick="handleLogin()">Login</button>
+                <div class="toggle-link" onclick="toggleForms()">Don't have an account? Register</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App Container -->
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🚗 DRIVER MAP NYC</h1>
+        </div>
+
+        <!-- Control Buttons -->
+        <div class="controls">
+            <button class="btn" id="checkinBtn">📍 Check-in</button>
+            <button class="btn" id="checkoutBtn">🚪 Check-out</button>
+            <button class="btn" id="refreshBtn">🔄 Refresh</button>
+            <button class="btn" id="logoutBtn">🚪 Logout</button>
+        </div>
+
+        <!-- Status Badge -->
+        <div class="status offline" id="statusBadge">● OFFLINE</div>
+
+        <!-- Map -->
+        <div id="map"></div>
+
+        <!-- Stats Card -->
+        <div class="stats">
+            <h3>LIVE STATS</h3>
+            <div class="stat-item available">
+                <span class="label">Available:</span>
+                <span class="value" id="availableDrivers">0</span>
+            </div>
+            <div class="stat-item busy">
+                <span class="label">With Passenger:</span>
+                <span class="value" id="busyDrivers">0</span>
+            </div>
+            <div class="stat-item">
+                <span class="label">Your Zone:</span>
+                <span class="value" id="yourZone">--</span>
+            </div>
+            <div class="stat-item">
+                <span class="label">TLC Plate:</span>
+                <span class="value" id="yourPlate">--</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Load TLC Plate Numbers from external file -->
+    <script src="tlc-plates-2025.js"></script>
+    <script>
+        // ===== PWA FUNCTIONALITY =====
+        
+        // Register Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then((registration) => {
+                        console.log('✅ Service Worker registered:', registration.scope);
+                    })
+                    .catch((error) => {
+                        console.log('❌ Service Worker registration failed:', error);
+                    });
+            });
+        }
+
+        // Install PWA prompt
+        let deferredPrompt;
+        const installPrompt = document.getElementById('installPrompt');
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            // Prevent the mini-infobar from appearing on mobile
+            e.preventDefault();
+            // Save the event so it can be triggered later
+            deferredPrompt = e;
+            // Show install prompt after 5 seconds
+            setTimeout(() => {
+                if (!localStorage.getItem('installPromptDismissed')) {
+                    installPrompt.classList.add('show');
+                }
+            }, 5000);
+        });
+
+        // Handle install prompt click
+        installPrompt.addEventListener('click', async (e) => {
+            if (e.target.classList.contains('close-btn')) {
+                return; // Don't install if clicking close button
+            }
+            
+            if (!deferredPrompt) {
+                return;
+            }
+            
+            // Show the install prompt
+            deferredPrompt.prompt();
+            
+            // Wait for the user to respond to the prompt
+            const { outcome } = await deferredPrompt.userChoice;
+            console.log(`User response to install prompt: ${outcome}`);
+            
+            // Clear the deferredPrompt
+            deferredPrompt = null;
+            installPrompt.classList.remove('show');
+        });
+
+        // Dismiss install prompt
+        function dismissInstallPrompt() {
+            installPrompt.classList.remove('show');
+            localStorage.setItem('installPromptDismissed', 'true');
+        }
+
+        // Track when app is installed
+        window.addEventListener('appinstalled', () => {
+            console.log('✅ PWA was installed');
+            installPrompt.classList.remove('show');
+            localStorage.setItem('appInstalled', 'true');
+        });
+
+        // Detect if app is running in standalone mode
+        if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
+            console.log('✅ App is running in standalone mode');
+            document.body.classList.add('standalone-mode');
+        }
+
+        // Online/Offline detection
+        const offlineIndicator = document.getElementById('offlineIndicator');
+
+        window.addEventListener('online', () => {
+            console.log('✅ Back online');
+            offlineIndicator.classList.remove('show');
+        });
+
+        window.addEventListener('offline', () => {
+            console.log('⚠️ Gone offline');
+            offlineIndicator.classList.add('show');
+        });
+
+        // Check initial connection status
+        if (!navigator.onLine) {
+            offlineIndicator.classList.add('show');
+        }
+
+        // ===== END PWA FUNCTIONALITY =====
+
+        // Generate background stars
+        const starsContainer = document.getElementById('starsContainer');
+        for (let i = 0; i < 50; i++) {
+            const star = document.createElement('div');
+            star.className = 'star';
+            star.style.width = Math.random() * 3 + 1 + 'px';
+            star.style.height = star.style.width;
+            star.style.left = Math.random() * 100 + '%';
+            star.style.top = Math.random() * 100 + '%';
+            star.style.animationDelay = Math.random() * 4 + 's';
+            starsContainer.appendChild(star);
+        }
+
+        // Toggle between registration and login forms
+        function toggleForms() {
+            const registerForm = document.getElementById('registerForm');
+            const loginForm = document.getElementById('loginForm');
+            
+            if (registerForm.style.display === 'none') {
+                registerForm.style.display = 'block';
+                loginForm.style.display = 'none';
+            } else {
+                registerForm.style.display = 'none';
+                loginForm.style.display = 'block';
+            }
+        }
+
+        // Handle registration
+        function handleRegister() {
+            const name = document.getElementById('registerName').value.trim();
+            const phone = document.getElementById('registerPhone').value.trim();
+            const plate = document.getElementById('registerPlate').value.trim().toUpperCase();
+            const vehicleType = document.getElementById('registerVehicleType').value;
+
+            if (!name || !phone || !plate || !vehicleType) {
+                alert('Please fill in all fields');
+                return;
+            }
+
+            // Validate TLC Plate Number
+            if (!validTLCPlates.includes(plate)) {
+                alert('Invalid TLC Plate Number. This plate is not authorized in our system.');
+                return;
+            }
+
+            // Check for duplicate registration
+            const registeredPlates = getRegisteredPlates();
+            if (registeredPlates.includes(plate)) {
+                alert('This TLC Plate Number is already registered. Each plate can only be registered once.');
+                return;
+            }
+
+            const driverData = {
+                name: name,
+                phone: phone,
+                plate: plate,
+                vehicleType: vehicleType,
+                registeredAt: new Date().toISOString()
+            };
+
+            localStorage.setItem('currentDriver', JSON.stringify(driverData));
+            localStorage.setItem('loginTimestamp', Date.now());
+            addRegisteredPlate(plate);
+            currentDriver = driverData;
+
+            completeLogin();
+        }
+
+        // Handle login
+        function handleLogin() {
+            const phone = document.getElementById('loginPhone').value.trim();
+
+            if (!phone) {
+                alert('Please enter your phone number');
+                return;
+            }
+
+            const storedDriver = localStorage.getItem('currentDriver');
+            if (storedDriver) {
+                const driver = JSON.parse(storedDriver);
+                if (driver.phone === phone) {
+                    // Check if the plate is still valid
+                    if (driver.plate && !validTLCPlates.includes(driver.plate)) {
+                        alert('Your TLC Plate Number is no longer authorized. Please contact support.');
+                        return;
+                    }
+                    currentDriver = driver;
+                    localStorage.setItem('loginTimestamp', Date.now());
+                    completeLogin();
+                } else {
+                    alert('Phone number not found. Please register first.');
+                }
+            } else {
+                alert('No account found. Please register first.');
+            }
+        }
+
+        // Complete login and show main app
+        function completeLogin() {
+            document.body.classList.remove('overlay-active');
+            document.getElementById('registrationOverlay').classList.add('hidden');
+            
+            const header = document.querySelector('.header h1');
+            // Show driver name and TLC plate
+            header.innerHTML = `🚗 ${currentDriver.name} | TLC: ${currentDriver.plate}`;
+            
+            // Update TLC plate in stats
+            document.getElementById('yourPlate').textContent = currentDriver.plate || '--';
+            
+            initMap();
+        }
+
+        // Check if user is already logged in
+        function checkLogin() {
+            const storedDriver = localStorage.getItem('currentDriver');
+            const loginTimestamp = localStorage.getItem('loginTimestamp');
+            
+            if (storedDriver && loginTimestamp) {
+                const hoursSinceLogin = (Date.now() - parseInt(loginTimestamp)) / (1000 * 60 * 60);
+                
+                if (hoursSinceLogin < 24) {
+                    currentDriver = JSON.parse(storedDriver);
+                    completeLogin();
+                } else {
+                    localStorage.removeItem('currentDriver');
+                    localStorage.removeItem('loginTimestamp');
+                }
+            }
+        }
+
+        // Global variables
+        let map = null;
+        let markers = [];
+        let myLocationMarker = null;
+        let radiusCircle = null;
+        let myActualLocation = null;
+        let userLocation = null;
+        let isOnline = false;
+        let currentDriver = null;
+
+        // NOTE: validTLCPlates is now loaded from external file: tlc-plates-2025.js
+        // To update plates, simply replace that file with the new year's data
+
+        // Get registered plates from localStorage
+        function getRegisteredPlates() {
+            const registered = localStorage.getItem('registeredPlates');
+            return registered ? JSON.parse(registered) : [];
+        }
+
+        // Add plate to registered list
+        function addRegisteredPlate(plate) {
+            const registered = getRegisteredPlates();
+            registered.push(plate.toUpperCase());
+            localStorage.setItem('registeredPlates', JSON.stringify(registered));
+        }
+
+        // Vehicle icons
+        const vehicleIcons = {
+            uberx: '🚗',
+            comfort: '🚙',
+            xl: '🚐',
+            black: '🖤',
+            suv: '🚙'
+        };
+
+        // NYC zones
+        const zones = [
+            { name: 'Manhattan', coords: [40.7831, -73.9712], drivers: 0 },
+            { name: 'Brooklyn', coords: [40.6782, -73.9442], drivers: 0 },
+            { name: 'Queens', coords: [40.7282, -73.7949], drivers: 0 },
+            { name: 'Bronx', coords: [40.8448, -73.8648], drivers: 0 },
+            { name: 'JFK Airport', coords: [40.6413, -73.7781], drivers: 0 },
+            { name: 'LGA Airport', coords: [40.7769, -73.8740], drivers: 0 },
+            { name: 'Staten Island', coords: [40.5795, -74.1502], drivers: 0 }
+        ];
+
+        let driverData = [];
+
+        // Generate random drivers
+        function generateRandomDriver(zone) {
+            const latOffset = (Math.random() - 0.5) * 0.05;
+            const lngOffset = (Math.random() - 0.5) * 0.05;
+            const vehicleTypes = ['uberx', 'comfort', 'xl', 'black', 'suv'];
+
+            return {
+                lat: zone.coords[0] + latOffset,
+                lng: zone.coords[1] + lngOffset,
+                vehicleType: vehicleTypes[Math.floor(Math.random() * vehicleTypes.length)],
+                isMoving: Math.random() > 0.7,
+                speed: Math.random() * 0.001
+            };
+        }
+
+        // Initialize driver data
+        function initializeDriverData() {
+            driverData = [];
+            zones.forEach(zone => {
+                const driverCount = Math.floor(Math.random() * 15) + 5;
+                for (let i = 0; i < driverCount; i++) {
+                    driverData.push(generateRandomDriver(zone));
+                }
+            });
+        }
+
+        // Calculate distance between two points (in miles)
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 3959;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
+        }
+
+        // Update driver movement
+        function updateDriverMovement() {
+            driverData.forEach(driver => {
+                if (driver.isMoving) {
+                    driver.lat += (Math.random() - 0.5) * driver.speed;
+                    driver.lng += (Math.random() - 0.5) * driver.speed;
+
+                    if (Math.random() > 0.95) {
+                        driver.isMoving = false;
+                    }
+                } else {
+                    if (Math.random() > 0.9) {
+                        driver.isMoving = true;
+                        driver.speed = Math.random() * 0.001;
+                    }
+                }
+            });
+        }
+
+        // Initialize map
+        function initMap() {
+            map = L.map('map', {
+                center: [40.7128, -73.9460],
+                zoom: 11,
+                zoomControl: true,
+                attributionControl: true
+            });
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 19
+            }).addTo(map);
+
+            initializeDriverData();
+            renderMap();
+            
+            // Update driver movement every 5 seconds
+            setInterval(() => {
+                updateDriverMovement();
+                renderMap();
+            }, 5000);
+        }
+
+        function renderMap() {
+            if (!map) return;
+
+            markers.forEach(marker => map.removeLayer(marker));
+            if (radiusCircle) {
+                map.removeLayer(radiusCircle);
+            }
+            markers = [];
+
+            if (isOnline && myActualLocation) {
+                radiusCircle = L.circle(myActualLocation, {
+                    radius: 1609.34,  // 1 mile in meters
+                    color: '#60a5fa',
+                    fillColor: '#60a5fa',
+                    fillOpacity: 0.1,
+                    weight: 2,
+                    opacity: 0.4
+                }).addTo(map);
+            }
+
+            let availableCount = 0;
+            let busyCount = 0;
+
+            driverData.forEach(driver => {
+                // If online with GPS, only show drivers within 1 mile
+                if (isOnline && myActualLocation) {
+                    const distance = calculateDistance(
+                        myActualLocation[0],
+                        myActualLocation[1],
+                        driver.lat,
+                        driver.lng
+                    );
+                    if (distance > 1) return;  // Changed from 2 to 1 mile
+                }
+                
+                const vehicleIcon = vehicleIcons[driver.vehicleType];
+                
+                // Style based on movement status
+                let iconStyle;
+                if (driver.isMoving) {
+                    // With passenger: gray and transparent
+                    iconStyle = `font-size: 24px; opacity: 0.4; filter: grayscale(100%);`;
+                    busyCount++;
+                } else {
+                    // Available: colored with green glow
+                    iconStyle = `font-size: 24px; filter: drop-shadow(0 0 5px rgba(74, 222, 128, 0.8));`;
+                    availableCount++;
+                }
+                
+                const driverMarker = L.marker([driver.lat, driver.lng], {
+                    icon: L.divIcon({
+                        className: 'vehicle-icon',
+                        html: `<div style="${iconStyle}">${vehicleIcon}</div>`,
+                        iconSize: [30, 30],
+                        iconAnchor: [15, 15]
+                    })
+                }).addTo(map);
+                
+                markers.push(driverMarker);
+            });
+
+            // Update stats
+            document.getElementById('availableDrivers').textContent = availableCount;
+            document.getElementById('busyDrivers').textContent = busyCount;
+            
+            const yourZoneText = userLocation ? userLocation.name.substring(0, 8) : '--';
+            document.getElementById('yourZone').textContent = yourZoneText;
+        }
+
+        // Check-in
+        document.getElementById('checkinBtn').addEventListener('click', () => {
+            if (!isOnline || !map) return;
+            
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        myActualLocation = [position.coords.latitude, position.coords.longitude];
+
+                        if (myLocationMarker) {
+                            map.removeLayer(myLocationMarker);
+                        }
+
+                        const userVehicleType = currentDriver ? currentDriver.vehicleType : 'uberx';
+                        const userVehicleIcon = vehicleIcons[userVehicleType];
+
+                        myLocationMarker = L.marker(myActualLocation, {
+                            icon: L.divIcon({
+                                className: 'vehicle-icon',
+                                html: `<div style="font-size: 32px; filter: drop-shadow(0 0 8px rgba(74, 222, 128, 0.8)); animation: pulse 2s ease-in-out infinite;">${userVehicleIcon}</div>`,
+                                iconSize: [40, 40],
+                                iconAnchor: [20, 20]
+                            }),
+                            zIndexOffset: 1000
+                        }).addTo(map);
+
+                        let nearestZone = zones[0];
+                        let minDistance = calculateDistance(
+                            myActualLocation[0],
+                            myActualLocation[1],
+                            nearestZone.coords[0],
+                            nearestZone.coords[1]
+                        );
+
+                        zones.forEach(zone => {
+                            const distance = calculateDistance(
+                                myActualLocation[0],
+                                myActualLocation[1],
+                                zone.coords[0],
+                                zone.coords[1]
+                            );
+                            if (distance < minDistance) {
+                                minDistance = distance;
+                                nearestZone = zone;
+                            }
+                        });
+
+                        nearestZone.drivers++;
+                        userLocation = nearestZone;
+                        
+                        renderMap();
+                        map.setView(myActualLocation, 13);
+                    },
+                    (error) => {
+                        alert('Unable to get your location. Please enable GPS.');
+                    },
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                );
+            } else {
+                alert('Your browser does not support geolocation.');
+            }
+        });
+
+        // Check-out
+        document.getElementById('checkoutBtn').addEventListener('click', () => {
+            if (userLocation) {
+                userLocation.drivers = Math.max(0, userLocation.drivers - 1);
+                userLocation = null;
+                myActualLocation = null;
+                
+                if (myLocationMarker) {
+                    map.removeLayer(myLocationMarker);
+                    myLocationMarker = null;
+                }
+                if (radiusCircle) {
+                    map.removeLayer(radiusCircle);
+                    radiusCircle = null;
+                }
+                
+                renderMap();
+                map.setView([40.7128, -73.9460], 11);
+            }
+        });
+
+        // Refresh
+        document.getElementById('refreshBtn').addEventListener('click', () => {
+            if (!map) return;
+            initializeDriverData();
+            renderMap();
+        });
+
+        // Online status
+        document.getElementById('statusBadge').addEventListener('click', () => {
+            isOnline = !isOnline;
+            const badge = document.getElementById('statusBadge');
+            if (isOnline) {
+                badge.className = 'status online';
+                badge.textContent = '● ONLINE';
+            } else {
+                badge.className = 'status offline';
+                badge.textContent = '● OFFLINE';
+                if (userLocation) {
+                    userLocation.drivers = Math.max(0, userLocation.drivers - 1);
+                    userLocation = null;
+                }
+                myActualLocation = null;
+                
+                if (myLocationMarker) {
+                    map.removeLayer(myLocationMarker);
+                    myLocationMarker = null;
+                }
+                if (radiusCircle) {
+                    map.removeLayer(radiusCircle);
+                    radiusCircle = null;
+                }
+                
+                if (map) {
+                    renderMap();
+                    map.setView([40.7128, -73.9460], 11);
+                }
+            }
+        });
+
+        // Logout
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            if (confirm('Are you sure you want to logout?')) {
+                if (userLocation) {
+                    userLocation.drivers = Math.max(0, userLocation.drivers - 1);
+                    userLocation = null;
+                }
+                
+                myActualLocation = null;
+                
+                if (myLocationMarker) {
+                    map.removeLayer(myLocationMarker);
+                    myLocationMarker = null;
+                }
+                if (radiusCircle) {
+                    map.removeLayer(radiusCircle);
+                    radiusCircle = null;
+                }
+                
+                // Clear login data and timestamp
+                localStorage.removeItem('currentDriver');
+                localStorage.removeItem('loginTimestamp');
+                currentDriver = null;
+                
+                const header = document.querySelector('.header h1');
+                header.innerHTML = '🚗 NYC DRIVER MAP';
+                
+                // Reset TLC plate display
+                document.getElementById('yourPlate').textContent = '--';
+                
+                document.body.classList.add('overlay-active');
+                document.getElementById('registrationOverlay').classList.remove('hidden');
+                document.getElementById('loginPhone').value = '';
+                
+                alert('You have been logged out successfully.');
+            }
+        });
+
+        window.addEventListener('DOMContentLoaded', () => {
+            // Set initial overlay state
+            document.body.classList.add('overlay-active');
+            checkLogin();
+        });
+    </script>
+</body>
+</html>
