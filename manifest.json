@@ -63,14 +63,14 @@
       "name": "Check In",
       "short_name": "Check In",
       "description": "Check in to your location",
-      "url": "/uber-driver-map-movement-fixed.html#checkin",
+      "url": "./#checkin",
       "icons": [{ "src": "icons/icon-96x96.png", "sizes": "96x96" }]
     },
     {
       "name": "View Map",
       "short_name": "Map",
       "description": "View driver density map",
-      "url": "/uber-driver-map-movement-fixed.html#map",
+      "url": "./#map",
       "icons": [{ "src": "icons/icon-96x96.png", "sizes": "96x96" }]
     }
   ],
