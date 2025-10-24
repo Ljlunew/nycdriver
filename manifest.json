@@ -2,12 +2,12 @@
   "name": "NYC Driver Map - Rideshare Community",
   "short_name": "NYC Driver",
   "description": "NYC rideshare driver map with real-time tracking. Stay Together • Unity Is Strength",
-  "start_url": "/uber-driver-map-movement-fixed.html",
+  "start_url": "./",
   "display": "standalone",
   "background_color": "#1a1a1a",
   "theme_color": "#000000",
   "orientation": "portrait",
-  "scope": "/",
+  "scope": "./",
   "icons": [
     {
       "src": "icons/icon-72x72.png",
