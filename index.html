@@ -768,21 +768,41 @@
 
             const storedDriver = localStorage.getItem('currentDriver');
             if (storedDriver) {
-                const driver = JSON.parse(storedDriver);
-                if (driver.phone === phone) {
-                    // Check if the plate is still valid
-                    if (driver.plate && !validTLCPlates.includes(driver.plate)) {
-                        alert('Your TLC Plate Number is no longer authorized. Please contact support.');
+                try {
+                    const driver = JSON.parse(storedDriver);
+                    
+                    // Check if old version data
+                    if (!driver.plate) {
+                        localStorage.removeItem('currentDriver');
+                        localStorage.removeItem('loginTimestamp');
+                        localStorage.removeItem('registeredPlates');
+                        alert('Your account data is outdated. Please register again with your TLC plate number.');
+                        toggleForms(); // Switch to registration form
                         return;
                     }
-                    currentDriver = driver;
-                    localStorage.setItem('loginTimestamp', Date.now());
-                    completeLogin();
-                } else {
-                    alert('Phone number not found. Please register first.');
+                    
+                    if (driver.phone === phone) {
+                        // Check if the plate is still valid
+                        if (driver.plate && !validTLCPlates.includes(driver.plate)) {
+                            alert('Your TLC Plate Number is no longer authorized. Please contact support.');
+                            return;
+                        }
+                        currentDriver = driver;
+                        localStorage.setItem('loginTimestamp', Date.now());
+                        completeLogin();
+                    } else {
+                        alert('Phone number not found. Please check your number or register a new account.');
+                    }
+                } catch (error) {
+                    console.error('Error during login:', error);
+                    alert('Login error. Please try registering again.');
+                    localStorage.removeItem('currentDriver');
+                    localStorage.removeItem('loginTimestamp');
+                    localStorage.removeItem('registeredPlates');
                 }
             } else {
                 alert('No account found. Please register first.');
+                toggleForms(); // Switch to registration form
             }
         }
 
@@ -792,11 +812,13 @@
             document.getElementById('registrationOverlay').classList.add('hidden');
             
             const header = document.querySelector('.header h1');
-            // Show driver name and TLC plate
-            header.innerHTML = `🚗 ${currentDriver.name} | TLC: ${currentDriver.plate}`;
+            // Show driver name and TLC plate (with fallback)
+            const driverName = currentDriver.name || 'Driver';
+            const tlcPlate = currentDriver.plate || 'N/A';
+            header.innerHTML = `🚗 ${driverName} | TLC: ${tlcPlate}`;
             
-            // Update TLC plate in stats
-            document.getElementById('yourPlate').textContent = currentDriver.plate || '--';
+            // Update TLC plate in stats (with fallback)
+            document.getElementById('yourPlate').textContent = tlcPlate;
             
             initMap();
         }
@@ -807,12 +829,31 @@
             const loginTimestamp = localStorage.getItem('loginTimestamp');
             
             if (storedDriver && loginTimestamp) {
-                const hoursSinceLogin = (Date.now() - parseInt(loginTimestamp)) / (1000 * 60 * 60);
-                
-                if (hoursSinceLogin < 24) {
-                    currentDriver = JSON.parse(storedDriver);
-                    completeLogin();
-                } else {
+                try {
+                    const driver = JSON.parse(storedDriver);
+                    
+                    // Check if driver data has plate field (new version)
+                    if (!driver.plate) {
+                        // Old version data - clear and force re-registration
+                        console.log('Old version data detected, clearing...');
+                        localStorage.removeItem('currentDriver');
+                        localStorage.removeItem('loginTimestamp');
+                        localStorage.removeItem('registeredPlates');
+                        alert('Please register again with your TLC plate number.');
+                        return;
+                    }
+                    
+                    const hoursSinceLogin = (Date.now() - parseInt(loginTimestamp)) / (1000 * 60 * 60);
+                    
+                    if (hoursSinceLogin < 24) {
+                        currentDriver = driver;
+                        completeLogin();
+                    } else {
+                        localStorage.removeItem('currentDriver');
+                        localStorage.removeItem('loginTimestamp');
+                    }
+                } catch (error) {
+                    console.error('Error parsing stored driver data:', error);
                     localStorage.removeItem('currentDriver');
                     localStorage.removeItem('loginTimestamp');
                 }
@@ -1159,9 +1200,10 @@
                     radiusCircle = null;
                 }
                 
-                // Clear login data and timestamp
-                localStorage.removeItem('currentDriver');
+                // Clear login timestamp but keep driver data for re-login
                 localStorage.removeItem('loginTimestamp');
+                // Don't clear currentDriver - keep it for login
+                // Don't clear registeredPlates - keep it to prevent duplicate registrations
                 currentDriver = null;
                 
                 const header = document.querySelector('.header h1');
@@ -1179,6 +1221,31 @@
         });
 
         window.addEventListener('DOMContentLoaded', () => {
+            // Data version check and migration
+            const dataVersion = localStorage.getItem('dataVersion');
+            const currentVersion = '1.1'; // Version with TLC plate support
+            
+            if (!dataVersion || dataVersion !== currentVersion) {
+                // Old version detected or first time - clear old data
+                const storedDriver = localStorage.getItem('currentDriver');
+                if (storedDriver) {
+                    try {
+                        const driver = JSON.parse(storedDriver);
+                        if (!driver.plate) {
+                            // Old version data without plate - clear everything
+                            console.log('Clearing old version data...');
+                            localStorage.clear();
+                            alert('App updated! Please register again with your TLC plate number.');
+                        }
+                    } catch (e) {
+                        console.error('Error checking data version:', e);
+                        localStorage.clear();
+                    }
+                }
+                // Set current version
+                localStorage.setItem('dataVersion', currentVersion);
+            }
+            
             // Set initial overlay state
             document.body.classList.add('overlay-active');
             checkLogin();
